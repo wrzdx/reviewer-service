@@ -1,0 +1,33 @@
+# Binary output
+bin/
+build/
+*.out
+*.exe
+*.test
+
+# Env files
+# .env
+.env.*
+!.env.example
+!.template.env
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+
+# Coverage
+coverage.out
+
+# Docker volumes (если создаёшь)
+data/
+tmp/
+
+# Goose or similar migration locks
+*.lock
+*.tmp
