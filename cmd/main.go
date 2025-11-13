@@ -33,8 +33,8 @@ func main() {
 	prRouter.HandleFunc("/merge", handlers.MergePRHandler).Methods("POST")
 	prRouter.HandleFunc("/reassign", handlers.ReassignPRHandler).Methods("POST")
 
-	log.Println("Server starting on :8000")
-	if err := http.ListenAndServe(":8000", r); err != nil {
+	log.Println("Server starting on :8080")
+	if err := http.ListenAndServe(":8080", r); err != nil {
 		log.Fatal(err)
 	}
 }

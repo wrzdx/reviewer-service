@@ -8,6 +8,7 @@ services:
       - "5432:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
+      - ./app/db/migrations.sql:/docker-entrypoint-initdb.d/migrations.sql
 
 volumes:
   db-data:
