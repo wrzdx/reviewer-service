@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"reviewer-service/app/db"
 	"reviewer-service/app/handlers"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -34,7 +35,17 @@ func main() {
 	prRouter.HandleFunc("/reassign", handlers.ReassignPRHandler).Methods("POST")
 
 	log.Println("Server starting on :8080")
-	if err := http.ListenAndServe(":8080", r); err != nil {
-		log.Fatal(err)
+	srv := &http.Server{
+		Addr:         ":8080",
+		Handler:      r,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	log.Println("Server starting on :8080")
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		db.Close()
+		log.Printf("server error: %v", err)
 	}
 }

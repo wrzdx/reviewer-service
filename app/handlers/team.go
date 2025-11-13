@@ -41,7 +41,11 @@ func CreateTeamHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]models.Team{"team": team})
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]models.Team{"team": team}); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func GetTeamHandler(w http.ResponseWriter, r *http.Request) {
@@ -77,8 +81,11 @@ func GetTeamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(models.Team{
+	if err := json.NewEncoder(w).Encode(models.Team{
 		TeamName: teamName,
 		Members:  members,
-	})
+	}); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }

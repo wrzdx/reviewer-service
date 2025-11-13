@@ -46,14 +46,17 @@ func SetUserActiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"user": map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"user": map[string]any{
 			"user_id":   req.UserID,
 			"username":  username,
 			"team_name": teamName,
 			"is_active": isActive,
 		},
-	})
+	}); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func GetUserPRsHandler(w http.ResponseWriter, r *http.Request) {
@@ -84,8 +87,11 @@ func GetUserPRsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"user_id":       userID,
 		"pull_requests": prs,
-	})
+	}); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }

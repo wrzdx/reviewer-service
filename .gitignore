@@ -6,7 +6,7 @@ build/
 *.test
 
 # Env files
-# .env
+.env
 .env.*
 !.env.example
 !.template.env

@@ -39,7 +39,7 @@ func CreatePRHandler(w http.ResponseWriter, r *http.Request) {
 	candidates := []string{}
 	for rows.Next() {
 		var u string
-		if err := rows.Scan(&u); err == nil {
+		if err = rows.Scan(&u); err == nil {
 			candidates = append(candidates, u)
 		}
 	}
@@ -61,7 +61,7 @@ func CreatePRHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	err = json.NewEncoder(w).Encode(map[string]any{
 		"pr": models.PullRequest{
 			PullRequestID:     req.PullRequestID,
 			PullRequestName:   req.PullRequestName,
@@ -70,6 +70,10 @@ func CreatePRHandler(w http.ResponseWriter, r *http.Request) {
 			AssignedReviewers: assigned,
 		},
 	})
+	if err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func MergePRHandler(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +129,10 @@ func MergePRHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"pr": pr})
+	if err := json.NewEncoder(w).Encode(map[string]any{"pr": pr}); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func ReassignPRHandler(w http.ResponseWriter, r *http.Request) {
@@ -154,49 +161,61 @@ func ReassignPRHandler(w http.ResponseWriter, r *http.Request) {
 
 	found := false
 	for i, uid := range assigned {
-		if uid == req.OldReviewerID {
-			found = true
+		if uid != req.OldReviewerID {
+			continue
+		}
+		found = true
 
-			var teamName string
-			err = db.Pool.QueryRow(ctx, "SELECT team_name FROM users WHERE user_id=$1", req.OldReviewerID).Scan(&teamName)
-			if err != nil {
+		var teamName string
+		err = db.Pool.QueryRow(ctx, "SELECT team_name FROM users WHERE user_id=$1", req.OldReviewerID).Scan(&teamName)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		rows, _ := db.Pool.Query(ctx, `
+			SELECT user_id FROM users WHERE team_name=$1 AND is_active=true AND user_id<>$2
+		`, teamName, req.OldReviewerID)
+		candidates := []string{}
+		for rows.Next() {
+			var u string
+			if err := rows.Scan(&u); err != nil {
 				http.Error(w, "internal server error", http.StatusInternalServerError)
+				rows.Close()
 				return
 			}
+			candidates = append(candidates, u)
+		}
+		if err := rows.Err(); err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		rows.Close()
 
-			rows, _ := db.Pool.Query(ctx, `
-				SELECT user_id FROM users WHERE team_name=$1 AND is_active=true AND user_id<>$2
-			`, teamName, req.OldReviewerID)
-			candidates := []string{}
-			for rows.Next() {
-				var u string
-				rows.Scan(&u)
-				candidates = append(candidates, u)
-			}
-			rows.Close()
+		if len(candidates) == 0 {
+			http.Error(w, `{"error":{"code":"NO_CANDIDATE","message":"no active replacement candidate in team"}}`, http.StatusConflict)
+			return
+		}
 
-			if len(candidates) == 0 {
-				http.Error(w, `{"error":{"code":"NO_CANDIDATE","message":"no active replacement candidate in team"}}`, http.StatusConflict)
-				return
-			}
+		newReviewer := candidates[0]
+		assigned[i] = newReviewer
 
-			newReviewer := candidates[0]
-			assigned[i] = newReviewer
+		_, _ = db.Pool.Exec(ctx, `
+			UPDATE pull_requests SET assigned_reviewers=$1 WHERE pull_request_id=$2
+		`, assigned, req.PullRequestID)
 
-			_, _ = db.Pool.Exec(ctx, `
-				UPDATE pull_requests SET assigned_reviewers=$1 WHERE pull_request_id=$2
-			`, assigned, req.PullRequestID)
-
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"pr":          models.PullRequest{PullRequestID: req.PullRequestID, AssignedReviewers: assigned},
-				"replaced_by": newReviewer,
-			})
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"pr":          models.PullRequest{PullRequestID: req.PullRequestID, AssignedReviewers: assigned},
+			"replaced_by": newReviewer,
+		}); err != nil {
+			http.Error(w, "failed to encode response", http.StatusInternalServerError)
 			return
 		}
 	}
 
 	if !found {
 		http.Error(w, `{"error":{"code":"NOT_ASSIGNED","message":"reviewer is not assigned to this PR"}}`, http.StatusConflict)
+		return
 	}
 }
