@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"reviewer-service/app/db"
 	"reviewer-service/app/models"
@@ -25,6 +26,7 @@ func CreateTeamHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":{"code":"TEAM_EXISTS","message":"team_name already exists"}}`, http.StatusBadRequest)
 			return
 		}
+		log.Printf("Failed to create team: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}

@@ -37,7 +37,8 @@ type PullRequestShort struct {
 	Status          string `json:"status"`
 }
 
-// Запросы
+// Requests
+
 type CreatePRRequest struct {
 	PullRequestID   string `json:"pull_request_id"`
 	PullRequestName string `json:"pull_request_name"`

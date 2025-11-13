@@ -3,10 +3,11 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"github.com/jackc/pgx/v5/pgconn"
 	"net/http"
 	"reviewer-service/app/db"
 	"reviewer-service/app/models"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func SetUserActiveHandler(w http.ResponseWriter, r *http.Request) {
@@ -16,7 +17,6 @@ func SetUserActiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Обновляем is_active
 	commandTag, err := db.Pool.Exec(context.Background(), `
 		UPDATE users SET is_active=$1 WHERE user_id=$2
 	`, req.IsActive, req.UserID)
@@ -35,7 +35,6 @@ func SetUserActiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Возвращаем обновленного пользователя
 	var username, teamName string
 	var isActive bool
 	err = db.Pool.QueryRow(context.Background(), `

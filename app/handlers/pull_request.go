@@ -19,7 +19,6 @@ func CreatePRHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Проверяем, что автор существует и получаем его команду
 	var teamName string
 	err := db.Pool.QueryRow(ctx, "SELECT team_name FROM users WHERE user_id=$1", req.AuthorID).Scan(&teamName)
 	if err != nil {
@@ -27,7 +26,6 @@ func CreatePRHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получаем активных участников команды (кроме автора)
 	rows, err := db.Pool.Query(ctx, `
 		SELECT user_id FROM users
 		WHERE team_name=$1 AND is_active=true AND user_id<>$2
@@ -46,7 +44,6 @@ func CreatePRHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Назначаем до 2 ревьюверов случайно
 	assigned := []string{}
 	for i := 0; i < 2 && len(candidates) > 0; i++ {
 		assigned = append(assigned, candidates[0])
@@ -99,7 +96,6 @@ func MergePRHandler(w http.ResponseWriter, r *http.Request) {
 		`, req.PullRequestID)
 	}
 
-	// Возвращаем PR
 	var pr models.PullRequest
 	var reviewers []string
 	var mergedAt *time.Time
@@ -141,7 +137,6 @@ func ReassignPRHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Проверяем PR и статус
 	var status string
 	var assigned []string
 	err := db.Pool.QueryRow(ctx, `
@@ -157,13 +152,11 @@ func ReassignPRHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверяем, что old reviewer назначен
 	found := false
 	for i, uid := range assigned {
 		if uid == req.OldReviewerID {
 			found = true
 
-			// Получаем команду old reviewer
 			var teamName string
 			err = db.Pool.QueryRow(ctx, "SELECT team_name FROM users WHERE user_id=$1", req.OldReviewerID).Scan(&teamName)
 			if err != nil {
@@ -171,7 +164,6 @@ func ReassignPRHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// Получаем других активных участников команды
 			rows, _ := db.Pool.Query(ctx, `
 				SELECT user_id FROM users WHERE team_name=$1 AND is_active=true AND user_id<>$2
 			`, teamName, req.OldReviewerID)
@@ -188,7 +180,7 @@ func ReassignPRHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			newReviewer := candidates[0] // можно рандомизировать
+			newReviewer := candidates[0]
 			assigned[i] = newReviewer
 
 			_, _ = db.Pool.Exec(ctx, `
