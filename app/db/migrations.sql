@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS pull_requests (
     pull_request_id TEXT PRIMARY KEY,
     pull_request_name TEXT NOT NULL,
     author_id TEXT REFERENCES users(user_id),
-    status TEXT NOT NULL,
-    assigned_reviewers TEXT[]
-);
+    status TEXT NOT NULL CHECK (status IN ('OPEN', 'MERGED')),
+    assigned_reviewers TEXT[],
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    merged_at TIMESTAMPTZ
+);  
