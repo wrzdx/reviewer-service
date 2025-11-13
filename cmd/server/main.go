@@ -15,11 +15,6 @@ func main() {
 	}
 	defer db.Close()
 
-	// Migrations
-	if err := db.RunMigrations(); err != nil {
-		log.Fatal("Failed to run migrations:", err)
-	}
-
 	r := mux.NewRouter()
 
 	// Team endpoints

@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -35,19 +34,4 @@ func Close() {
 	if Pool != nil {
 		Pool.Close()
 	}
-}
-
-func RunMigrations() error {
-	sqlBytes, err := os.ReadFile("app/db/migrations.sql")
-	if err != nil {
-		return err
-	}
-
-	sql := string(sqlBytes)
-
-	_, err = Pool.Exec(context.Background(), sql)
-	if err != nil {
-		log.Printf("Failed to run migrations: %v", err)
-	}
-	return err
 }
