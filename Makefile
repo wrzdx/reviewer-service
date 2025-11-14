@@ -1,7 +1,7 @@
 APP_NAME=reviewer-service
 DB_SERVICE=db
 
-.PHONY: build run docker-up docker-down logs
+.PHONY: build run docker-up docker-down test lint
 
 # Build the Go application
 build:
@@ -19,3 +19,14 @@ docker-up:
 docker-down:
 	docker compose down
 
+test:
+	docker compose -f docker-compose.app.yml up -d
+	@sleep 10
+	go test -v ./app/db/... ./app/e2e/...
+	docker compose -f docker-compose.app.yml down -v
+
+lint:
+	golangci-lint run ./...
+
+lint-fix:
+	golangci-lint run ./... --fix
