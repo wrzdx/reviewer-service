@@ -12,6 +12,15 @@ services:
       - .env           
     command: ["tail", "-f", "/dev/null"] 
 
+  k6:
+    image: grafana/k6:latest
+    volumes:
+      - ./load_test.js:/app/load_test.js
+    networks:
+      - default
+    depends_on:
+      - app
+
 
 volumes:
   go-mod-cache:

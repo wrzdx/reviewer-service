@@ -22,7 +22,13 @@ docker-down:
 test:
 	docker compose -f docker-compose.yml -f docker-compose.test.yml up --build -d db app go-tester
 	sleep 10
-	docker compose exec go-tester go test -v ./app/db/... ./app/e2e/...
+	docker compose -f docker-compose.yml -f docker-compose.test.yml exec go-tester go test -v ./app/db/... ./app/e2e/...
+	docker compose -f docker-compose.yml -f docker-compose.test.yml down -v
+
+test-load:
+	docker compose -f docker-compose.yml -f docker-compose.test.yml up -d db app
+	sleep 10
+	docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm k6 run /app/load_test.js
 	docker compose -f docker-compose.yml -f docker-compose.test.yml down -v
 
 lint:
