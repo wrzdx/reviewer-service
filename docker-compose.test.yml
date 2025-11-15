@@ -1,0 +1,17 @@
+services:
+  go-tester:
+    image: golang:1.25
+    volumes:
+      - .:/app         
+      - go-mod-cache:/go/pkg/mod
+    working_dir: /app
+    depends_on:
+      - db             
+      - app            
+    env_file:
+      - .env           
+    command: ["tail", "-f", "/dev/null"] 
+
+
+volumes:
+  go-mod-cache:

@@ -23,18 +23,7 @@ services:
       - .env
     command: ["./reviewer-service"]
     restart: always
-
-  go-tester:
-    image: golang:1.25
-    volumes:
-      - .:/app         
-    working_dir: /app
-    depends_on:
-      - db             
-    env_file:
-      - .env           
-    command: ["tail", "-f", "/dev/null"] 
-
+    
 
 volumes:
   db-data:
