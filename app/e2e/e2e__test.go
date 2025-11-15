@@ -16,17 +16,15 @@ import (
 var baseURL string
 
 func TestMain(m *testing.M) {
-	// Загружаем тестовые переменные окружения
 	if err := testutils.LoadTestEnv("../../.env.test"); err != nil {
 		log.Fatalf("failed to load env: %v", err)
 	}
 
-	// Подключаемся к тестовой БД
 	if err := db.Init(); err != nil {
 		panic(err)
 	}
 
-	baseURL = "http://localhost:8080" // предполагается, что сервис поднят
+	baseURL = "http://localhost:8080"
 
 	db.Close()
 	os.Exit(m.Run())
@@ -69,7 +67,6 @@ func getJSON(t *testing.T, path string) *http.Response {
 }
 
 func TestE2E_CreateTeamUserAndPR(t *testing.T) {
-	// 1. Создаем команду с участниками
 	teamPayload := map[string]any{
 		"team_name": "backend",
 		"members": []map[string]any{
@@ -83,7 +80,6 @@ func TestE2E_CreateTeamUserAndPR(t *testing.T) {
 		t.Fatalf("expected 201, got %d", resp.StatusCode)
 	}
 
-	// 2. Создаем PR от пользователя u1
 	prPayload := map[string]any{
 		"pull_request_id":   "pr-1001",
 		"pull_request_name": "Add search",
@@ -95,7 +91,6 @@ func TestE2E_CreateTeamUserAndPR(t *testing.T) {
 		t.Fatalf("expected 201, got %d", resp.StatusCode)
 	}
 
-	// 3. Проверяем, что u2 назначен на ревью
 	resp = getJSON(t, "/users/getReview?user_id=u2")
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -118,7 +113,6 @@ func TestE2E_CreateTeamUserAndPR(t *testing.T) {
 		t.Fatalf("expected u2 to have PR pr-1001 assigned")
 	}
 
-	// 4. Проверка PR статуса
 	pr := result.PullRequests[0]
 	if pr.Status != "OPEN" {
 		t.Fatalf("expected PR status OPEN, got %s", pr.Status)
@@ -126,7 +120,6 @@ func TestE2E_CreateTeamUserAndPR(t *testing.T) {
 }
 
 func TestE2E_ReassignReviewer(t *testing.T) {
-	// Создаем команду и PR, как в предыдущем тесте
 	teamPayload := map[string]any{
 		"team_name": "frontend",
 		"members": []map[string]any{
@@ -151,7 +144,6 @@ func TestE2E_ReassignReviewer(t *testing.T) {
 		t.Fatalf("expected 201, got %d", resp.StatusCode)
 	}
 
-	// Переназначаем ревьювера u4 на нового
 	reassignPayload := map[string]any{
 		"pull_request_id": "pr-2001",
 		"old_user_id":     "u4",
@@ -162,7 +154,6 @@ func TestE2E_ReassignReviewer(t *testing.T) {
 		t.Fatalf("expected 408, got %d", resp.StatusCode)
 	}
 
-	// Проверяем старого ревьювера через getReview
 	resp = getJSON(t, "/users/getReview?user_id=u4")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)

@@ -8,7 +8,7 @@ build/
 # Env files
 .env
 .env.*
-!.env.example
+!.env.test
 !.template.env
 
 # Editor/IDE
