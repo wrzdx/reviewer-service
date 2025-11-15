@@ -64,3 +64,20 @@ type UserAssignmentStats struct {
 	Username        string `json:"username"`
 	AssignedPRCount int    `json:"assigned_pr_count"`
 }
+
+type DeactivateUsersRequest struct {
+	UserIDs []string `json:"user_ids"`
+}
+
+type ReassignmentDetail struct {
+	PullRequestID string `json:"pull_request_id"`
+	OldAuthorID   string `json:"old_author_id"`
+	NewReviewerID string `json:"new_reviewer_id"`
+}
+
+type DeactivationResponse struct {
+	Status              string               `json:"status"`
+	DeactivatedUsers    []string             `json:"deactivated_users"`
+	ReassignedPRsCount  int                  `json:"reassigned_prs_count"`
+	ReassignmentDetails []ReassignmentDetail `json:"reassignment_details,omitempty"`
+}

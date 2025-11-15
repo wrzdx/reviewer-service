@@ -27,6 +27,7 @@ func main() {
 	userRouter := r.PathPrefix("/users").Subrouter()
 	userRouter.HandleFunc("/setIsActive", handlers.SetUserActiveHandler).Methods("POST")
 	userRouter.HandleFunc("/getReview", handlers.GetUserPRsHandler).Methods("GET")
+	userRouter.HandleFunc("/deactivate", handlers.ProcessUserDeactivationHandler).Methods("POST")
 
 	// PullRequest endpoints
 	prRouter := r.PathPrefix("/pullRequest").Subrouter()

@@ -3,10 +3,13 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"reviewer-service/app/db"
 	"reviewer-service/app/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -94,4 +97,132 @@ func GetUserPRsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 		return
 	}
+}
+
+func ProcessUserDeactivationHandler(w http.ResponseWriter, r *http.Request) {
+	var req models.DeactivateUsersRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		log.Printf("Failed to start transaction: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	deactivateQuery := `UPDATE users SET is_active = FALSE WHERE user_id = ANY($1) AND is_active = TRUE RETURNING user_id`
+	rows, err := tx.Query(ctx, deactivateQuery, req.UserIDs)
+	if err != nil {
+		log.Printf("Failed to deactivate users: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var deactivatedUsers []string
+	for rows.Next() {
+		var userID string
+		rows.Scan(&userID)
+		deactivatedUsers = append(deactivatedUsers, userID)
+	}
+
+	findPRsQuery := `
+        SELECT pull_request_id, author_id FROM pull_requests 
+        WHERE author_id = ANY($1) AND status = 'OPEN'
+    `
+	prRows, err := tx.Query(ctx, findPRsQuery, deactivatedUsers)
+	if err != nil {
+		log.Printf("Failed to find open PRs for deactivated users: %v", err)
+		http.Error(w, "Failed to find open PRs for deactivated users", http.StatusInternalServerError)
+		return
+	}
+	defer prRows.Close()
+
+	var reassignmentDetails []models.ReassignmentDetail
+	var prIDs []string
+
+	for prRows.Next() {
+		var prID, authorID string
+		prRows.Scan(&prID, &authorID)
+		prIDs = append(prIDs, prID)
+		reassignmentDetails = append(reassignmentDetails, models.ReassignmentDetail{
+			PullRequestID: prID,
+			OldAuthorID:   authorID,
+		})
+	}
+	prRows.Close()
+	for i, prID := range prIDs {
+		newReviewerID, err := AssignNewReviewer(ctx, tx, prID)
+		if err != nil {
+			log.Printf("Failed to reassign PR %s: %v", prID, err)
+			http.Error(w, fmt.Sprintf("failed to reassign PR %s", prID), http.StatusBadRequest)
+			return
+		}
+		reassignmentDetails[i].NewReviewerID = newReviewerID
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("Failed to commit transaction: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	response := models.DeactivationResponse{
+		Status:              "completed",
+		DeactivatedUsers:    deactivatedUsers,
+		ReassignedPRsCount:  len(prIDs),
+		ReassignmentDetails: reassignmentDetails,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+func AssignNewReviewer(ctx context.Context, tx pgx.Tx, prID string) (string, error) {
+	var currentAuthorID, teamName string
+	err := tx.QueryRow(ctx, `
+		SELECT p.author_id, u.team_name 
+		FROM pull_requests p
+		JOIN users u ON p.author_id = u.user_id
+		WHERE p.pull_request_id = $1
+	`, prID).Scan(&currentAuthorID, &teamName)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "", fmt.Errorf("PR or author not found for PR ID %s", prID)
+		}
+		return "", fmt.Errorf("failed to fetch PR author info: %w", err)
+	}
+
+	var newReviewerID string
+	err = tx.QueryRow(ctx, `
+		SELECT user_id FROM users 
+		WHERE team_name = $1 AND is_active = TRUE AND user_id != $2
+		ORDER BY RANDOM() LIMIT 1 -- Выбираем случайного активного пользователя
+	`, teamName, currentAuthorID).Scan(&newReviewerID)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "", fmt.Errorf("no suitable active reviewer found in team %s", teamName)
+		}
+		return "", fmt.Errorf("failed to find a new reviewer: %w", err)
+	}
+
+	updateQuery := `
+		UPDATE pull_requests 
+		SET assigned_reviewers = ARRAY[$1::text] 
+		WHERE pull_request_id = $2
+	`
+	_, err = tx.Exec(ctx, updateQuery, newReviewerID, prID)
+	if err != nil {
+		return "", fmt.Errorf("failed to update PR assigned_reviewers: %w", err)
+	}
+
+	return newReviewerID, nil
 }
