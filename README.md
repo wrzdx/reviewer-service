@@ -28,7 +28,7 @@ go mod tidy
 ### 4. Запуск сервисов через Docker Compose
 
 ```sh
-docker compose up --build -d
+make docker-up # если нет make то вручную запускать команды в Makefile
 ```
 
 После старта сервис будет доступен на:
