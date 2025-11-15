@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -16,15 +17,21 @@ import (
 var baseURL string
 
 func TestMain(m *testing.M) {
-	if err := testutils.LoadTestEnv("../../.env.test"); err != nil {
+	if err := testutils.LoadTestEnv("../../.env"); err != nil {
 		log.Fatalf("failed to load env: %v", err)
 	}
 
 	if err := db.Init(); err != nil {
 		panic(err)
 	}
-
-	baseURL = "http://localhost:8080"
+	if err := db.ClearAllTables(); err != nil {
+		log.Fatalf("Failed to clear database: %v", err)
+	}
+	appHost := os.Getenv("APP_HOST")
+	if appHost == "" {
+		appHost = "localhost"
+	}
+	baseURL = fmt.Sprintf("http://%s:8080", appHost)
 
 	db.Close()
 	os.Exit(m.Run())

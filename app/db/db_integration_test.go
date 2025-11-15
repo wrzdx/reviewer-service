@@ -9,7 +9,7 @@ import (
 )
 
 func setupDB(t *testing.T) {
-	if err := testutils.LoadTestEnv("../../.env.test"); err != nil {
+	if err := testutils.LoadTestEnv("../../.env"); err != nil {
 		t.Fatalf("failed to load env: %v", err)
 	}
 	if err := db.Init(); err != nil {

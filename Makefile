@@ -20,10 +20,11 @@ docker-down:
 	docker compose down
 
 test:
-	docker compose -f docker-compose.app.yml up -d
-	sleep 5
-	go test -v ./app/db/... ./app/e2e/...
-	docker compose -f docker-compose.app.yml down -v
+	docker compose up --build -d db app go-tester
+	sleep 10
+	docker compose exec go-tester go test -v ./app/db/...
+	docker compose exec go-tester go test -v ./app/e2e/...
+	docker compose down -v
 
 lint:
 	golangci-lint run ./...

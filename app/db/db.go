@@ -35,3 +35,35 @@ func Close() {
 		Pool.Close()
 	}
 }
+
+func ClearAllTables() error {
+	if Pool == nil {
+		return fmt.Errorf("database pool is not initialized")
+	}
+
+	tables := []string{
+		"pull_requests",
+		"users",
+		"teams",
+	}
+
+	ctx := context.Background()
+	tx, err := Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	for _, table := range tables {
+		query := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table)
+		if _, err := tx.Exec(ctx, query); err != nil {
+			tx.Rollback(ctx)
+			return fmt.Errorf("failed to truncate table %s: %w", table, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
