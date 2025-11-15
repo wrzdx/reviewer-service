@@ -21,7 +21,7 @@ docker-down:
 
 test:
 	docker compose -f docker-compose.app.yml up -d
-	@sleep 10
+	sleep 5
 	go test -v ./app/db/... ./app/e2e/...
 	docker compose -f docker-compose.app.yml down -v
 

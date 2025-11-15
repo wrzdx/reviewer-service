@@ -1,4 +1,3 @@
-// app/db/db_integration_test.go
 package db_test
 
 import (
@@ -45,7 +44,6 @@ func TestInsertAndSelectPR(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Вставляем команду
 	_, err := db.Pool.Exec(ctx, `
 		INSERT INTO teams (team_name) VALUES ($1)
 	`, "backend")
@@ -53,7 +51,6 @@ func TestInsertAndSelectPR(t *testing.T) {
 		t.Fatalf("failed to insert team: %v", err)
 	}
 
-	// Вставляем пользователя
 	_, err = db.Pool.Exec(ctx, `
 		INSERT INTO users (user_id, username, team_name, is_active) VALUES ($1, $2, $3, $4)
 	`, "u1", "Alice", "backend", true)
@@ -61,7 +58,6 @@ func TestInsertAndSelectPR(t *testing.T) {
 		t.Fatalf("failed to insert user: %v", err)
 	}
 
-	// Вставляем PR
 	_, err = db.Pool.Exec(ctx, `
 		INSERT INTO pull_requests (pull_request_id, pull_request_name, author_id, status, assigned_reviewers)
 		VALUES ($1, $2, $3, $4, $5)
@@ -70,7 +66,6 @@ func TestInsertAndSelectPR(t *testing.T) {
 		t.Fatalf("failed to insert PR: %v", err)
 	}
 
-	// Проверяем PR
 	var status string
 	err = db.Pool.QueryRow(ctx,
 		"SELECT status FROM pull_requests WHERE pull_request_id=$1", "pr-test").Scan(&status)
