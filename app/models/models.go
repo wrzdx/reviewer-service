@@ -58,3 +58,9 @@ type SetUserActiveRequest struct {
 	UserID   string `json:"user_id"`
 	IsActive bool   `json:"is_active"`
 }
+
+type UserAssignmentStats struct {
+	UserID          string `json:"user_id"`
+	Username        string `json:"username"`
+	AssignedPRCount int    `json:"assigned_pr_count"`
+}

@@ -34,6 +34,9 @@ func main() {
 	prRouter.HandleFunc("/merge", handlers.MergePRHandler).Methods("POST")
 	prRouter.HandleFunc("/reassign", handlers.ReassignPRHandler).Methods("POST")
 
+	// Stats endpoints
+	r.HandleFunc("/stats/assignments", handlers.GetAssignmentStatsHandler).Methods("GET")
+
 	log.Println("Server starting on :8080")
 	srv := &http.Server{
 		Addr:         ":8080",
