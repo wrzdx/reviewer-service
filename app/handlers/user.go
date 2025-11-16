@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -99,6 +100,60 @@ func GetUserPRsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func deactivateUsers(ctx context.Context, tx pgx.Tx, userIDs []string) ([]string, error) {
+	deactivateQuery := `UPDATE users SET is_active = FALSE WHERE user_id = ANY($1) AND is_active = TRUE RETURNING user_id`
+	rows, err := tx.Query(ctx, deactivateQuery, userIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute deactivate query: %w", err)
+	}
+	defer rows.Close()
+
+	var deactivatedUsers []string
+	for rows.Next() {
+		var userID string
+		if err = rows.Scan(&userID); err != nil {
+			log.Printf("Error scanning deactivated user ID: %v", err)
+			continue
+		}
+		deactivatedUsers = append(deactivatedUsers, userID)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during iteration over deactivated users: %w", err)
+	}
+	return deactivatedUsers, nil
+}
+
+func findOpenPRs(ctx context.Context, tx pgx.Tx, authorIDs []string) ([]models.ReassignmentDetail, error) {
+	findPRsQuery := `
+        SELECT pull_request_id, author_id FROM pull_requests 
+        WHERE author_id = ANY($1) AND status = 'OPEN'
+    `
+	rows, err := tx.Query(ctx, findPRsQuery, authorIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute find PRs query: %w", err)
+	}
+	defer rows.Close()
+
+	var details []models.ReassignmentDetail
+	for rows.Next() {
+		var prID, authorID string
+		if err = rows.Scan(&prID, &authorID); err != nil {
+			log.Printf("Error scanning open PR row: %v", err)
+			continue
+		}
+		details = append(details, models.ReassignmentDetail{
+			PullRequestID: prID,
+			OldAuthorID:   authorID,
+		})
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during iteration over open PRs: %w", err)
+	}
+	return details, nil
+}
+
 func ProcessUserDeactivationHandler(w http.ResponseWriter, r *http.Request) {
 	var req models.DeactivateUsersRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -113,54 +168,29 @@ func ProcessUserDeactivationHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if rbe := tx.Rollback(ctx); rbe != nil && !errors.Is(rbe, pgx.ErrTxClosed) {
+			log.Printf("Rollback error in ProcessUserDeactivationHandler: %v", rbe)
+		}
+	}()
 
-	deactivateQuery := `UPDATE users SET is_active = FALSE WHERE user_id = ANY($1) AND is_active = TRUE RETURNING user_id`
-	rows, err := tx.Query(ctx, deactivateQuery, req.UserIDs)
+	deactivatedUsers, err := deactivateUsers(ctx, tx, req.UserIDs)
 	if err != nil {
-		log.Printf("Failed to deactivate users: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
 
-	var deactivatedUsers []string
-	for rows.Next() {
-		var userID string
-		rows.Scan(&userID)
-		deactivatedUsers = append(deactivatedUsers, userID)
-	}
-
-	findPRsQuery := `
-        SELECT pull_request_id, author_id FROM pull_requests 
-        WHERE author_id = ANY($1) AND status = 'OPEN'
-    `
-	prRows, err := tx.Query(ctx, findPRsQuery, deactivatedUsers)
+	reassignmentDetails, err := findOpenPRs(ctx, tx, deactivatedUsers)
 	if err != nil {
-		log.Printf("Failed to find open PRs for deactivated users: %v", err)
-		http.Error(w, "Failed to find open PRs for deactivated users", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer prRows.Close()
 
-	var reassignmentDetails []models.ReassignmentDetail
-	var prIDs []string
-
-	for prRows.Next() {
-		var prID, authorID string
-		prRows.Scan(&prID, &authorID)
-		prIDs = append(prIDs, prID)
-		reassignmentDetails = append(reassignmentDetails, models.ReassignmentDetail{
-			PullRequestID: prID,
-			OldAuthorID:   authorID,
-		})
-	}
-	prRows.Close()
-	for i, prID := range prIDs {
-		newReviewerID, err := AssignNewReviewer(ctx, tx, prID)
+	for i, detail := range reassignmentDetails {
+		newReviewerID, err := AssignNewReviewer(ctx, tx, detail.PullRequestID)
 		if err != nil {
-			log.Printf("Failed to reassign PR %s: %v", prID, err)
-			http.Error(w, fmt.Sprintf("failed to reassign PR %s", prID), http.StatusBadRequest)
+			log.Printf("Failed to reassign PR %s: %v", detail.PullRequestID, err)
+			http.Error(w, fmt.Sprintf("failed to reassign PR %s", detail.PullRequestID), http.StatusBadRequest)
 			return
 		}
 		reassignmentDetails[i].NewReviewerID = newReviewerID
@@ -175,13 +205,14 @@ func ProcessUserDeactivationHandler(w http.ResponseWriter, r *http.Request) {
 	response := models.DeactivationResponse{
 		Status:              "completed",
 		DeactivatedUsers:    deactivatedUsers,
-		ReassignedPRsCount:  len(prIDs),
+		ReassignedPRsCount:  len(reassignmentDetails),
 		ReassignmentDetails: reassignmentDetails,
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response in ProcessUserDeactivationHandler: %v", err)
+	}
 }
 
 func AssignNewReviewer(ctx context.Context, tx pgx.Tx, prID string) (string, error) {
@@ -194,7 +225,7 @@ func AssignNewReviewer(ctx context.Context, tx pgx.Tx, prID string) (string, err
 	`, prID).Scan(&currentAuthorID, &teamName)
 
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return "", fmt.Errorf("PR or author not found for PR ID %s", prID)
 		}
 		return "", fmt.Errorf("failed to fetch PR author info: %w", err)
@@ -208,7 +239,7 @@ func AssignNewReviewer(ctx context.Context, tx pgx.Tx, prID string) (string, err
 	`, teamName, currentAuthorID).Scan(&newReviewerID)
 
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return "", fmt.Errorf("no suitable active reviewer found in team %s", teamName)
 		}
 		return "", fmt.Errorf("failed to find a new reviewer: %w", err)

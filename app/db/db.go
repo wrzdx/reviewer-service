@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -56,7 +57,9 @@ func ClearAllTables() error {
 	for _, table := range tables {
 		query := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table)
 		if _, err := tx.Exec(ctx, query); err != nil {
-			tx.Rollback(ctx)
+			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+				log.Printf("Rollback error after exec error: %v", rollbackErr)
+			}
 			return fmt.Errorf("failed to truncate table %s: %w", table, err)
 		}
 	}

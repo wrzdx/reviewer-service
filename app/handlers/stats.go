@@ -9,7 +9,7 @@ import (
 	"reviewer-service/app/models"
 )
 
-func GetAssignmentStatsHandler(w http.ResponseWriter, r *http.Request) {
+func GetAssignmentStatsHandler(w http.ResponseWriter, _ *http.Request) {
 	ctx := context.Background()
 
 	query := `

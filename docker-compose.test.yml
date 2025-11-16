@@ -1,9 +1,11 @@
 services:
+  db:
+    volumes:
+      - db-test-data:/var/lib/postgresql/data
   go-tester:
     image: golang:1.25
     volumes:
       - .:/app         
-      - go-mod-cache:/go/pkg/mod
     working_dir: /app
     depends_on:
       - db             
@@ -23,4 +25,4 @@ services:
 
 
 volumes:
-  go-mod-cache:
+  db-test-data:

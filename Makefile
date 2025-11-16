@@ -22,7 +22,7 @@ docker-down:
 test:
 	docker compose -f docker-compose.yml -f docker-compose.test.yml up --build -d db app go-tester
 	sleep 10
-	docker compose -f docker-compose.yml -f docker-compose.test.yml exec go-tester go test -v ./app/db/... ./app/e2e/...
+	docker compose -f docker-compose.yml -f docker-compose.test.yml exec go-tester go test -v -p 1 ./app/db/... ./app/e2e/...
 	docker compose -f docker-compose.yml -f docker-compose.test.yml down -v
 
 test-load:
